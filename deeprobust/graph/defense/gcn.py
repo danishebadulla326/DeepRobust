@@ -105,6 +105,9 @@ class GCN(nn.Module):
         self.nclass = nclass
         self.gc1 = GraphConvolution(nfeat, nhid, with_bias=with_bias)
         self.gc2 = GraphConvolution(nhid, nclass, with_bias=with_bias)
+        self.gc_h1 = GraphConvolution(nhid, nhid, with_bias=with_bias)
+        self.gc_h2 = GraphConvolution(nhid, nhid, with_bias=with_bias)
+        self.gc_h3 = GraphConvolution(nhid, nhid, with_bias=with_bias)
         self.dropout = dropout
         self.lr = lr
         if not with_relu:
@@ -120,14 +123,17 @@ class GCN(nn.Module):
         self.features = None
 
     def forward(self, x, adj):
+        feature_vals={}
         if self.with_relu:
             x = F.relu(self.gc1(x, adj))
         else:
             x = self.gc1(x, adj)
 
         x = F.dropout(x, self.dropout, training=self.training)
+        feature_vals['conv1']=deepcopy(x.detach())
         x = self.gc2(x, adj)
-        return F.log_softmax(x, dim=1)
+        feature_vals['conv2']=deepcopy(x.detach())
+        return feature_vals,F.log_softmax(x, dim=1)
 
     def initialize(self):
         """Initialize parameters of GCN.
@@ -198,7 +204,7 @@ class GCN(nn.Module):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         for i in range(train_iters):
             optimizer.zero_grad()
-            output = self.forward(self.features, self.adj_norm)
+            _, output = self.forward(self.features, self.adj_norm)
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
             loss_train.backward()
             optimizer.step()
@@ -206,7 +212,7 @@ class GCN(nn.Module):
                 print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
 
         self.eval()
-        output = self.forward(self.features, self.adj_norm)
+        _, output = self.forward(self.features, self.adj_norm)
         self.output = output
 
     def _train_with_val(self, labels, idx_train, idx_val, train_iters, verbose):
@@ -220,7 +226,7 @@ class GCN(nn.Module):
         for i in range(train_iters):
             self.train()
             optimizer.zero_grad()
-            output = self.forward(self.features, self.adj_norm)
+            _, output = self.forward(self.features, self.adj_norm)
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
             loss_train.backward()
             optimizer.step()
@@ -229,7 +235,7 @@ class GCN(nn.Module):
                 print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
 
             self.eval()
-            output = self.forward(self.features, self.adj_norm)
+            _, output = self.forward(self.features, self.adj_norm)
             loss_val = F.nll_loss(output[idx_val], labels[idx_val])
             acc_val = utils.accuracy(output[idx_val], labels[idx_val])
 
@@ -258,7 +264,7 @@ class GCN(nn.Module):
         for i in range(train_iters):
             self.train()
             optimizer.zero_grad()
-            output = self.forward(self.features, self.adj_norm)
+            _, output = self.forward(self.features, self.adj_norm)
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
             loss_train.backward()
             optimizer.step()
@@ -267,7 +273,7 @@ class GCN(nn.Module):
                 print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
 
             self.eval()
-            output = self.forward(self.features, self.adj_norm)
+            _, output = self.forward(self.features, self.adj_norm)
 
             # def eval_class(output, labels):
             #     preds = output.max(1)[1].type_as(labels)
@@ -300,7 +306,7 @@ class GCN(nn.Module):
             node testing indices
         """
         self.eval()
-        output = self.predict()
+        _, output = self.predict()
         # output = self.output
         loss_test = F.nll_loss(output[idx_test], self.labels[idx_test])
         acc_test = utils.accuracy(output[idx_test], self.labels[idx_test])
