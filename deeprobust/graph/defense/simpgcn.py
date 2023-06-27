@@ -197,10 +197,11 @@ class SimPGCN(nn.Module):
 
 
     def forward(self, fea, adj):
-        x, _ = self.myforward(fea, adj)
+        _, x, _ = self.myforward(fea, adj)
         return x
 
     def myforward(self, fea, adj):
+        feature_vals={}
         '''output embedding and log_softmax'''
         if self.adj_knn is None:
             self.adj_knn = self.get_knn_graph(fea.to_dense().cpu().numpy())
@@ -215,16 +216,16 @@ class SimPGCN(nn.Module):
 
         x = F.dropout(x, self.dropout, training=self.training)
         embedding = x.clone()
-
+        feature_vals['conv1'] = deepcopy(embedding.detach())
         # output, no relu and dropput here.
         s_o = torch.sigmoid(x @ self.scores[-1] + self.bias[-1])
         Dk_o = (x @ self.D_k[-1] + self.D_bias[-1])
         x = (s_o * self.gc2(x, adj) + (1-s_o) * self.gc2(x, adj_knn)) + (gamma) * Dk_o * self.gc2(x, self.identity)
-
+        feature_vals['conv2'] = deepcopy(x.detach())
         x = F.log_softmax(x, dim=1)
 
         self.ss = torch.cat((s_i.view(1,-1), s_o.view(1,-1), gamma*Dk_i.view(1,-1), gamma*Dk_o.view(1,-1)), dim=0)
-        return x, embedding
+        return feature_vals, x, embedding
 
     def regression_loss(self, embeddings):
         if self.pseudo_labels is None:
@@ -256,7 +257,7 @@ class SimPGCN(nn.Module):
         for i in range(train_iters):
             self.train()
             optimizer.zero_grad()
-            output, embeddings = self.myforward(self.features, self.adj_norm)
+            _, output, embeddings = self.myforward(self.features, self.adj_norm)
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
             loss_ssl = self.lambda_ * self.regression_loss(embeddings)
             loss_total = loss_train + loss_ssl
@@ -282,7 +283,7 @@ class SimPGCN(nn.Module):
 
             self.train()
             optimizer.zero_grad()
-            output, embeddings = self.myforward(self.features, self.adj_norm)
+            _, output, embeddings = self.myforward(self.features, self.adj_norm)
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
             # acc_train = accuracy(output[idx_train], labels[idx_train])
             loss_ssl = self.lambda_ * self.regression_loss(embeddings)
@@ -323,7 +324,7 @@ class SimPGCN(nn.Module):
         for i in range(train_iters):
             self.train()
             optimizer.zero_grad()
-            output, embeddings = self.myforward(self.features, self.adj_norm)
+            _, output, embeddings = self.myforward(self.features, self.adj_norm)
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
             loss_ssl = self.lambda_ * self.regression_loss(embeddings)
             loss_total = loss_train + loss_ssl
@@ -360,7 +361,7 @@ class SimPGCN(nn.Module):
             node testing indices
         """
         self.eval()
-        output = self.predict()
+        _, output, _ = self.predict()
         # output = self.output
         loss_test = F.nll_loss(output[idx_test], self.labels[idx_test])
         acc_test = utils.accuracy(output[idx_test], self.labels[idx_test])
@@ -389,7 +390,7 @@ class SimPGCN(nn.Module):
 
         self.eval()
         if features is None and adj is None:
-            return self.forward(self.features, self.adj_norm)
+            return self.myforward(self.features, self.adj_norm)
         else:
             if type(adj) is not torch.Tensor:
                 features, adj = utils.to_tensor(features, adj, device=self.device)
@@ -399,7 +400,7 @@ class SimPGCN(nn.Module):
                 self.adj_norm = utils.normalize_adj_tensor(adj, sparse=True)
             else:
                 self.adj_norm = utils.normalize_adj_tensor(adj)
-            return self.forward(self.features, self.adj_norm)
+            return self.myforward(self.features, self.adj_norm)
 
 
 class AttrSim:

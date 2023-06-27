@@ -89,12 +89,15 @@ class GAT(nn.Module):
         self.best_output = None
 
     def forward(self, data):
+        feature_vals={}
         x, edge_index = data.x, data.edge_index
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = F.elu(self.conv1(x, edge_index))
+        feature_vals['conv1'] = deepcopy(x.detach())
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.conv2(x, edge_index)
-        return F.log_softmax(x, dim=1)
+        feature_vals['conv2'] = deepcopy(x.detach())
+        return feature_vals,F.log_softmax(x, dim=1)
 
     def initialize(self):
         """Initialize parameters of GAT.
@@ -144,7 +147,7 @@ class GAT(nn.Module):
         for i in range(train_iters):
             self.train()
             optimizer.zero_grad()
-            output = self.forward(self.data)
+            _,output = self.forward(self.data)
 
             loss_train = F.nll_loss(output[train_mask], labels[train_mask])
             loss_train.backward()
@@ -154,7 +157,7 @@ class GAT(nn.Module):
                 print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
 
             self.eval()
-            output = self.forward(self.data)
+            _,output = self.forward(self.data)
             loss_val = F.nll_loss(output[val_mask], labels[val_mask])
 
             if best_loss_val > loss_val:
@@ -182,7 +185,7 @@ class GAT(nn.Module):
         self.eval()
         test_mask = self.data.test_mask
         labels = self.data.y
-        output = self.forward(self.data)
+        _,output = self.forward(self.data)
         # output = self.output
         loss_test = F.nll_loss(output[test_mask], labels[test_mask])
         acc_test = utils.accuracy(output[test_mask], labels[test_mask])

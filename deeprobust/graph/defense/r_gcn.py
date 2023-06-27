@@ -123,7 +123,7 @@ class RGCN(Module):
     Parameters
     ----------
     nnodes : int
-        number of nodes in the input grpah
+        number of nodes in the input graph
     nfeat : int
         size of input feature dimension
     nhid : int

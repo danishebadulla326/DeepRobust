@@ -109,7 +109,7 @@ class ProGNN:
         self.model.train()
         self.optimizer.zero_grad()
 
-        output = self.model(features, adj)
+        _, output = self.model(features, adj)
         loss_train = F.nll_loss(output[idx_train], labels[idx_train])
         acc_train = accuracy(output[idx_train], labels[idx_train])
         loss_train.backward()
@@ -166,7 +166,7 @@ class ProGNN:
         else:
             loss_smooth_feat = 0 * loss_l1
 
-        output = self.model(features, normalized_adj)
+        _, output = self.model(features, normalized_adj)
         loss_gcn = F.nll_loss(output[idx_train], labels[idx_train])
         acc_train = accuracy(output[idx_train], labels[idx_train])
 
@@ -200,7 +200,7 @@ class ProGNN:
         # deactivates dropout during validation run.
         self.model.eval()
         normalized_adj = estimator.normalize()
-        output = self.model(features, normalized_adj)
+        _, output = self.model(features, normalized_adj)
 
         loss_val = F.nll_loss(output[idx_val], labels[idx_val])
         acc_val = accuracy(output[idx_val], labels[idx_val])
@@ -245,13 +245,13 @@ class ProGNN:
         adj = self.best_graph
         if self.best_graph is None:
             adj = self.estimator.normalize()
-        output = self.model(features, adj)
+        feature_vals, output = self.model(features, adj)
         loss_test = F.nll_loss(output[idx_test], labels[idx_test])
         acc_test = accuracy(output[idx_test], labels[idx_test])
         print("\tTest set results:",
               "loss= {:.4f}".format(loss_test.item()),
               "accuracy= {:.4f}".format(acc_test.item()))
-        return acc_test.item()
+        return feature_vals, acc_test.item()
 
     def feature_smoothing(self, adj, X):
         adj = (adj.t() + adj)/2
